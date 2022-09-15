@@ -1,23 +1,28 @@
 ---
+- name: Download AWS Inspector agent installer.
+  get_url:
+    url: "{{ aws_inspector_url }}"
+    dest: "{{ aws_inspector_installer_dest }}"
 
-# https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
-- name: Download awscliv2 installer.
-  unarchive:
-    src: "https://awscli.amazonaws.com/awscli-exe-linux-{{ ansible_architecture }}.zip"
-    dest: "{{ executable_temp_dir }}"
-    remote_src: true
-    creates: '{{ executable_temp_dir }}/aws'
-    mode: 0755
+- name: Configure proxy if necessary
+  template:
+    src: awsagent.env.j2
+    dest: /etc/init.d/awsagent.env
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart awsagent
+  when: aws_inspector_proxy_enabled
 
-- name: Run the installer.
-  command:
+- name: Ensure AWS Inspector agent is installed.
+  command: bash "{{ aws_inspector_installer_dest }}"
   args:
-    cmd: "{{ executable_temp_dir }}/aws/install"
-    creates: /usr/local/bin/aws
-  become: true
-  register: aws_install
+    creates: "/etc/init.d/awsagent"
+  when: not aws_inspector_role_test_mode
 
-- name: "Show installer output."
-  debug:
-    var: aws_install
-    verbosity: 2
+- name: Ensure awsagent service is running.
+  service:
+    name: awsagent
+    state: "{{ awsagent_state }}"
+    enabled: true
+  when: not aws_inspector_role_test_mode
